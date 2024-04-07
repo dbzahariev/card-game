@@ -32,7 +32,17 @@
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
+}
+
+.button-div {
+  padding: 10px;
+}
+
+.rame {
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
 }

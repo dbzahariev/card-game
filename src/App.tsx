@@ -102,7 +102,7 @@ interface Value {
 }
 
 interface Table {
-  showTable: boolean,
+  // showTable: boolean,
   hand1: Hand
   hand2: Hand
   hand3: Hand
@@ -111,7 +111,7 @@ interface Table {
 
 function App() {
   const [table1, setTable1] = useState<Table>({
-    showTable: false,
+    // showTable: false,
     hand1: {
       hand: [], position: "South", handConditions: {
         points: {
@@ -223,25 +223,31 @@ function App() {
     setTiger(!tiger)
   }
 
-  function printHand(hand: Hand) {
-    console.log("Hand:", `${hand.position}; Точки: ${getPointsOfHand(hand)}; Пики: ${getNumberOfSpades(hand)}; Купи: ${getNumberOfHearts(hand)}; Кари: ${getNumberOfDiamonds(hand)}; Трефи: ${getNumberOfClubs(hand)}`)
-  }
-
   function getHand(hand: Hand, coloda: Card[], conditions: HandConditions) {
     let miniColoda = [...coloda];
 
+    let count = 0
+    let maxCount = 300000
     do {
+      count += 1
       hand.hand = [];
       miniColoda = [...coloda];
 
       for (let i = 0; i < 13; i++) {
         const index = generateRandomIndex(miniColoda);
         const element = miniColoda.splice(index, 1)[0];
-        hand.hand.push(element);
+        if (element) {
+          hand.hand.push(element);
+        }
+      }
+      if (count === maxCount) {
+        alert("Invalid hand!!!");
+        hand.hand = []
+        break;
       }
     } while (isValid(hand, conditions));
 
-    return { hand, remainingCards: miniColoda };
+    return { hand, remainingCards: miniColoda, error: (count === maxCount) };
   }
 
   function isValid(hand: Hand, conditions: HandConditions) {
@@ -464,14 +470,9 @@ function App() {
   }
 
   function customList(param: "coloda" | "hand1" | "hand2" | "hand3" | "hand4") {
-    function getLabelForHand(hand?: Hand) {
-      let foo = getConvertedNameOfHand(param)
-      if (hand) {
-        return `${foo} ${hand.position}`
-      }
-      else {
-        return `Hand Hidden`
-      }
+    function getLabelForHand(hand: Hand) {
+      const foo = getConvertedNameOfHand(param)
+      return `${foo} ${hand.position}`
     }
 
     let colodaToShow: Card[] = []
@@ -492,10 +493,15 @@ function App() {
       label = getLabelForHand(table1.hand4)
       colodaToShow = table1.hand4.hand
     }
-    colodaToShow = colodaToShow.sort((a, b) => { return a.id - b.id })
-    if (param !== "coloda" && table1.showTable === false) {
-      colodaToShow = []
-      label = getLabelForHand()
+    colodaToShow = colodaToShow.sort((a, b) => { return a.id - b.id }).filter((val) => val !== undefined)
+    // label = getLabelForHand()
+    // if (param !== "coloda" && table1.showTable === false) {
+    //   colodaToShow = []
+    //   label = "foo2"//getLabelForHand()
+    // }
+
+    if (param !== 'coloda') {
+      return getNormalHand(colodaToShow, label)
     }
 
     return (
@@ -514,6 +520,7 @@ function App() {
                   className="rame"
                 >
                   <Checkbox
+                    id={labelId}
                     checked={checked.indexOf(value) !== -1}
                     tabIndex={-1}
                     disableRipple
@@ -530,6 +537,49 @@ function App() {
       </div>
     )
   };
+
+  function getNormalHand(cards: Card[], label: string) {
+    function genColorText(cards: Card[], index: number) {
+      if (cards.length === 0) return ""
+      const selectedColor: string = colors[index] + ""
+      const matchingCards = cards.filter((card) => card?.color === selectedColor);
+      const cardNames = matchingCards.map((card) => card?.card).join(", ");
+      return `${selectedColor}: ${cardNames}`;
+    }
+
+    let colodaToShow: { id: number, text: string }[] = [
+      { id: 0, text: `${genColorText(cards, 0)}` },
+      { id: 1, text: `${genColorText(cards, 1)}` },
+      { id: 2, text: `${genColorText(cards, 2)}` },
+      { id: 3, text: `${genColorText(cards, 3)}` },
+    ]
+
+    return (
+      <div>
+        <Paper sx={{ height: 240, width: 170, overflow: 'auto' }}>
+          <p style={{ justifyContent: "center", margin: "0px", alignItems: "center", display: "flex" }}>{label}</p>
+          <List dense component="div" role="list">
+            {colodaToShow.map((value: {
+              id: number;
+              text: string;
+            }) => {
+              const labelId = `transfer-list-item-${value.id}-label`;
+
+              return (
+                <ListItemButton
+                  key={value.id}
+                  role="listitem"
+                  className="rame"
+                >
+                  <ListItemText id={labelId} primary={`${value.text}`} />
+                </ListItemButton>
+              );
+            })}
+          </List>
+        </Paper >
+      </div >
+    )
+  }
 
   function not(a: Card[], b: Card[]) {
     return a.filter((value) => b.indexOf(value) === -1);
@@ -557,6 +607,15 @@ function App() {
     setChecked(not(checked, rightChecked));
   };
 
+  function returnCardFromHand(hands: Hand[]) {
+    let cardsToReturn: Card[] = []
+    hands.forEach(hand => {
+      hand.hand.forEach((card) => { cardsToReturn.push(card) })
+      hand.hand = []
+    })
+    cardsToReturn.forEach((card) => { remainingCards.push(card) })
+  }
+
   function genHand(type: "hand1" | "hand2" | "hand3" | "hand4", rem?: Card[]) {
     let hand = table1.hand1
     if (type === "hand1") {
@@ -568,53 +627,47 @@ function App() {
     } else if (type === "hand4") {
       hand = table1.hand4
     }
+    if (remainingCards.length === 0) {
+      if (type === 'hand2') {
+        returnCardFromHand([table1.hand2, table1.hand3, table1.hand4])
+      } else if (type === "hand3") {
+        returnCardFromHand([table1.hand3, table1.hand4])
+      } else if (type === "hand4") {
+        returnCardFromHand([table1.hand4])
+      } else {
+        returnCardFromHand([table1.hand2, table1.hand3, table1.hand4])
+      }
+    } else {
+      returnCardFromHand([hand])
+    }
     let generatedHand = getHand(hand, rem ?? remainingCards, hand.handConditions)
+    if (generatedHand.error) {
+      hand.hand = []
+      refresh()
+      return
+    }
     let newRemainingCards = generatedHand.remainingCards
 
-    let newTable1 = table1
+    let newTable1 = { ...table1 }
     if (type === "hand1") {
       newTable1 = { ...table1, hand1: generatedHand.hand }
-      // setHand1(generatedHand.hand)
     } else if (type === 'hand2') {
       newTable1 = { ...table1, hand2: generatedHand.hand }
-      // setHand2(generatedHand.hand)
     } else if (type === 'hand3') {
       newTable1 = { ...table1, hand3: generatedHand.hand }
-      // setHand3(generatedHand.hand)
     } else if (type === 'hand4') {
       newTable1 = { ...table1, hand4: generatedHand.hand }
-      // setHand4(generatedHand.hand)
     }
     setTable1(newTable1)
 
     setRemainingCards(newRemainingCards)
 
     if (type === "hand3") {
-      genHand("hand4", newRemainingCards)
-    }
-    let validTable = isValidTable(newTable1)
-    if (validTable) {
-      newTable1.showTable = true
-    }
-    else {
-      // genNewTable()
+      setTimeout(() => {
+        genHand("hand4", newRemainingCards)
+      }, 1)
     }
     refresh()
-  }
-
-  function genNewTable() {
-    genHand("hand1")
-    genHand("hand2")
-    genHand("hand3")
-    genHand("hand4")
-  }
-
-  function isValidTable(table: Table) {
-    const count = table.hand1.hand.length +
-      table.hand2.hand.length +
-      table.hand3.hand.length +
-      table.hand4.hand.length;
-    return count === 52;
   }
 
   function setValueForHand(e: any, hand: Hand, tableName: "hand2" | "hand3" | "hand4") {
@@ -676,50 +729,54 @@ function App() {
       if (remainingCards.length !== 0) {
         miniRemCards = [...remainingCards]
       } else {
-        h1.hand = []
+        // h1.hand = []
         h2.hand = []
         h3.hand = []
         h4.hand = []
-        miniRemCards = [...colodaInit]
+        miniRemCards = [...colodaInit].filter(card => !h1.hand.includes(card));
       }
 
-      if (h1.hand.length === 0) {
-        let genHand1 = getHand(h1, miniRemCards, h1.handConditions)
-        h1 = genHand1.hand
-        miniRemCards = genHand1.remainingCards
-      }
-
+      let haveError = false;
 
       if (h2.hand.length === 0) {
         let genHand2 = getHand(h2, miniRemCards, h2.handConditions)
+        haveError = genHand2.error
         h2 = genHand2.hand
         miniRemCards = genHand2.remainingCards
       }
 
 
 
-      if (h3.hand.length === 0) {
+      if (!haveError && h3.hand.length === 0) {
         let genHand3 = getHand(h3, miniRemCards, h3.handConditions)
+        haveError = genHand3.error
         h3 = genHand3.hand
         miniRemCards = genHand3.remainingCards
       }
 
 
-      if (h4.hand.length === 0) {
+      if (!haveError && h4.hand.length === 0) {
         let genHand4 = getHand(h4, miniRemCards, h4.handConditions)
+        haveError = genHand4.error
         h4 = genHand4.hand
         miniRemCards = genHand4.remainingCards
       }
 
-      setRemainingCards(miniRemCards)
+      if (haveError) {
+        miniRemCards = [...colodaInit].filter(card => !h1.hand.includes(card)).filter(card => !h2.hand.includes(card)).filter(card => !h3.hand.includes(card)).filter(card => !h4.hand.includes(card))
+        setRemainingCards(miniRemCards)
+        refresh()
+        return
+      }
 
       let newTable: Table = {
-        showTable: true,
+        // showTable: true,
         hand1: h1,
         hand2: h2,
         hand3: h3,
         hand4: h4,
       }
+      setRemainingCards(miniRemCards)
       setTable1(newTable)
     }
   }
@@ -732,9 +789,9 @@ function App() {
         <span>Points:</span>
         <div style={{ display: 'flex', gap: '10px' }}>
           <div style={{ display: 'flex', gap: '5px', width: '180px' }}>
-            <label htmlFor="minPoints">min:</label>
+            <label htmlFor={"minPoints for " + tableName}>min:</label>
             <input
-              id="minPoints"
+              id={"minPoints for " + tableName}
               name="minPoints"
               style={{ width: '50px' }}
               value={hand.handConditions.points.min}
@@ -742,9 +799,9 @@ function App() {
             />
           </div>
           <div>
-            <label htmlFor="minPoints">max: </label>
+            <label htmlFor={"maxPoints for " + tableName}>max: </label>
             <input
-              id="maxPoints"
+              id={"maxPoints for " + tableName}
               name="maxPoints"
               style={{ width: '50px' }}
               value={hand.handConditions.points.max}
@@ -756,9 +813,9 @@ function App() {
       <span>Numbers:</span>
       <div style={{ display: 'flex', gap: '10px' }}>
         <div style={{ width: '180px' }}>
-          <label htmlFor="numberSpadesMin">Spades (min): </label>
+          <label htmlFor={"numberSpadesMin for " + tableName}>Spades (min): </label>
           <input
-            id="numberSpadesMin"
+            id={"numberSpadesMin for " + tableName}
             name="numberSpadesMin"
             style={{ width: '50px' }}
             value={hand.handConditions.spades.min}
@@ -766,9 +823,9 @@ function App() {
           />
         </div>
         <div>
-          <label htmlFor="numberSpadesMax">Spades (max): </label>
+          <label htmlFor={"numberSpadesMax for " + tableName}>Spades (max): </label>
           <input
-            id="numberSpadesMax"
+            id={"numberSpadesMax for " + tableName}
             name="numberSpadesMax"
             style={{ width: '50px' }}
             value={hand.handConditions.spades.max}
@@ -778,9 +835,9 @@ function App() {
       </div>
       <div style={{ display: 'flex', gap: '10px' }}>
         <div style={{ width: '180px' }}>
-          <label htmlFor="numberHeartsMin">Hearts (min): </label>
+          <label htmlFor={"numberHeartsMin for " + tableName}>Hearts (min): </label>
           <input
-            id="numberHeartsMin"
+            id={"numberHeartsMin for " + tableName}
             name="numberHeartsMin"
             style={{ width: '50px' }}
             value={hand.handConditions.hearts.min}
@@ -788,9 +845,9 @@ function App() {
           />
         </div>
         <div>
-          <label htmlFor="numberHeartsMax">Hearts (max): </label>
+          <label htmlFor={"numberHeartsMax for " + tableName}>Hearts (max): </label>
           <input
-            id="numberHeartsMax"
+            id={"numberHeartsMax for " + tableName}
             name="numberHeartsMax"
             style={{ width: '50px' }}
             value={hand.handConditions.hearts.max}
@@ -800,9 +857,9 @@ function App() {
       </div>
       <div style={{ display: 'flex', gap: '10px' }}>
         <div style={{ width: '180px' }}>
-          <label htmlFor="numberDiamondsMin">Diamonds (min): </label>
+          <label htmlFor={"numberDiamondsMin for " + tableName}>Diamonds (min): </label>
           <input
-            id="numberDiamondsMin"
+            id={"numberDiamondsMin for " + tableName}
             name="numberDiamondsMin"
             style={{ width: '50px' }}
             value={hand.handConditions.diamonds.min}
@@ -810,9 +867,9 @@ function App() {
           />
         </div>
         <div>
-          <label htmlFor="numberDiamondsMax">Diamonds (max): </label>
+          <label htmlFor={"numberDiamondsMax for " + tableName}>Diamonds (max): </label>
           <input
-            id="numberDiamondsMax"
+            id={"numberDiamondsMax for " + tableName}
             name="numberDiamondsMax"
             style={{ width: '50px' }}
             value={hand.handConditions.diamonds.max}
@@ -822,9 +879,9 @@ function App() {
       </div>
       <div style={{ display: 'flex', gap: '10px' }}>
         <div style={{ width: '180px' }}>
-          <label htmlFor="numberClubsMin">Clubs (min): </label>
+          <label htmlFor={"numberClubsMin for " + tableName}>Clubs (min): </label>
           <input
-            id="numberClubsMin"
+            id={"numberClubsMin for " + tableName}
             name="numberClubsMin"
             style={{ width: '50px' }}
             value={hand.handConditions.clubs.min}
@@ -832,9 +889,9 @@ function App() {
           />
         </div>
         <div>
-          <label htmlFor="numberClubsMax">Clubs (max): </label>
+          <label htmlFor={"numberClubsMax for " + tableName}>Clubs (max): </label>
           <input
-            id="numberClubsMax"
+            id={"numberClubsMax for " + tableName}
             name="numberClubsMax"
             style={{ width: '50px' }}
             value={hand.handConditions.clubs.max}
@@ -880,7 +937,7 @@ function App() {
       <div style={{ display: "flex" }}>
         <Grid item>{customList("coloda")}</Grid>
         <div style={{ display: "flex", alignItems: "center" }}>
-          <div className='button-div'>
+          {/* <div className='button-div'>
             <Button
               sx={{ my: 0.5 }}
               variant="outlined"
@@ -891,7 +948,7 @@ function App() {
             >
               &lt;
             </Button>
-          </div>
+          </div> */}
           <div className='button-div'>
             <Button
               sx={{ my: 0.5 }}
@@ -916,16 +973,6 @@ function App() {
               aria-label="move selected left"
             >
               Gen hand2
-            </Button>
-          </div><div className='button-div'>
-            <Button
-              sx={{ my: 0.5 }}
-              variant="outlined"
-              size="small"
-              onClick={() => { genTable("table1") }}
-              aria-label="move selected left"
-            >
-              Gen table
             </Button>
           </div>
           <Grid item>{customList("hand2")}</Grid>
@@ -958,6 +1005,18 @@ function App() {
             </Button>
           </div>
           <Grid item>{customList("hand4")}</Grid>
+
+          <div className='button-div'>
+            <Button
+              sx={{ my: 0.5 }}
+              variant="outlined"
+              size="small"
+              onClick={() => { genTable("table1") }}
+              aria-label="move selected left"
+            >
+              Gen table
+            </Button>
+          </div>
         </div>
       </div>
       <div style={{ display: "flex" }}>
